@@ -84,7 +84,8 @@ sideHint: document.getElementById("sideHint"),
     anims: [],
     decisions: {},
     saved: null,
-    toastTimer: 0
+    toastTimer: 0,
+    failedSkels: {}
   };
 
   /* ---------------- 通用工具 ---------------- */
@@ -547,9 +548,30 @@ var thumbBox = el("div", "thumb-box");
 
   /* ---------------- 播放器装配 ---------------- */
 
+  function collectAssetErrors(list) {
+    var names = [];
+    (list || []).forEach(function (p) {
+      try {
+        var errs = p.assetManager && p.assetManager.getErrors ? p.assetManager.getErrors() : null;
+        if (errs) {
+          Object.keys(errs).forEach(function (key) {
+            var val = errs[key];
+            var detail = val && val.message ? val.message : typeof val === "object" ? JSON.stringify(val) : String(val);
+            var line = key + (detail ? " (" + detail + ")" : "");
+            if (names.indexOf(line) < 0) names.push(line);
+          });
+        }
+      } catch (err) {
+        /* 忽略 */
+      }
+    });
+    return names;
+  }
+
   function whenReady(token) {
     return new Promise(function (resolve, reject) {
       var started = Date.now();
+      var errorSince = 0;
       (function poll() {
         if (token !== state.token) {
           reject(new Error("superseded"));
@@ -561,34 +583,46 @@ var thumbBox = el("div", "thumb-box");
           setTimeout(poll, 60);
           return;
         }
+        // 单层解析失败时由运行库 error 回调触发降级重载 (swapBrokenLayer),
+        // 这里只负责网络类资产错误的容忍与整体就绪判定
+        var assetErrors = collectAssetErrors(list).filter(function (line) {
+          return line.indexOf("could not load skeleton") < 0;
+        });
+        if (assetErrors.length) {
+          // 容忍 1 秒内的瞬时错误 (快速切换时上一次请求被中断是正常现象),
+          // 若随后加载恢复则继续等待; 持续报错才判定失败
+          if (!errorSince) errorSince = Date.now();
+          if (Date.now() - errorSince > 1000) {
+            reject(new Error("资源加载失败：" + assetErrors.join("；")));
+            return;
+          }
+          setTimeout(poll, 60);
+          return;
+        }
+        errorSince = 0;
+        var broken = null;
+        for (var j = 0; j < list.length; j++) {
+          if (list[j].__parseFailed || !(list[j].skeleton && list[j].animationState)) { broken = list[j]; break; }
+        }
         var allDone = true;
         for (var i = 0; i < list.length; i++) {
-          var p = list[i];
-          if (!(p.assetManager && p.assetManager.isLoadingComplete())) {
+          if (!(list[i].assetManager && list[i].assetManager.isLoadingComplete())) {
             allDone = false;
             break;
           }
         }
-        if (allDone) {
-          var broken = false;
-          for (var j = 0; j < list.length; j++) {
-            if (!(list[j].skeleton && list[j].animationState)) broken = true;
-          }
-          if (!broken) {
-            fitUnionViewport();
-            captureBase();
-            applyTransform();
-            if (player) resolve(player);
-            else reject(new Error("资源解析失败"));
-          } else if (player && player.assetManager && player.assetManager.hasErrors()) {
-            reject(new Error("资源解析失败"));
-          } else {
-            setTimeout(poll, 60);
-          }
+        if (allDone && broken) {
+          // 资产全部下载完成但仍缺骨架: 该层解析失败, 走降级流程
+          swapBrokenLayer(broken, token);
+          reject(new Error("superseded"));
           return;
         }
-        if (player && player.assetManager && player.assetManager.hasErrors()) {
-          reject(new Error("资源解析失败"));
+        if (allDone && !broken) {
+          fitUnionViewport();
+          captureBase();
+          applyTransform();
+          if (player) resolve(player);
+          else reject(new Error("资源解析失败"));
           return;
         }
         if (Date.now() - started > WAIT_TIMEOUT) {
@@ -600,6 +634,54 @@ var thumbBox = el("div", "thumb-box");
     });
   }
 
+  function swapBrokenLayer(player, token) {
+    // 找到解析失败层对应的图层项
+    var layers = state.currentSpineLayers || [];
+    var failedItem = null;
+    for (var i = 0; i < layers.length; i++) {
+      if (layers[i] && player.config && player.config.skelUrl &&
+          player.config.skelUrl.indexOf(layers[i].skelName) >= 0) {
+        failedItem = layers[i];
+        break;
+      }
+    }
+    var failedName = failedItem ? failedItem.skelName : "?";
+    state.failedSkels[failedName] = true;
+    var stem = String(failedName).replace(/\.skel$/i, "").replace(/_hx$/i, "");
+
+    // 优先切换到同组互斥变体 (_hx / 基础层)
+    var swap = null;
+    var isHx = /_hx\.skel$/i.test(failedName);
+    for (var k = 0; k < layers.length; k++) {
+      var it = layers[k];
+      if (!it) continue;
+      var itStem = String(it.skelName).replace(/\.skel$/i, "").replace(/_hx$/i, "");
+      if (itStem === stem && /_hx\.skel$/i.test(it.skelName) === !isHx) { swap = it; break; }
+    }
+    if (swap && !state.failedSkels[swap.skelName]) {
+      toast("「" + (layerLabel(failedName) || failedName) + "」解析失败，已切换为替代图层");
+      // 仅替换 state.currentSpineLayers 中的该项后整体重载
+      state.currentSpineLayers = layers.map(function (it) {
+        var itStem = String((it && it.skelName) || "").replace(/\.skel$/i, "").replace(/_hx$/i, "");
+        return itStem === stem ? swap : it;
+      });
+      loadCurrent(0);
+      return;
+    }
+
+    // 无可用替代变体: 剔除该层, 渲染其余图层 (只剩一层时剔除后为空, 才整页报错)
+    var remaining = layers.filter(function (it) {
+      return it && String(it.skelName) !== failedName;
+    });
+    if (remaining.length) {
+      toast("「" + (layerLabel(failedName) || failedName) + "」无法解析，已跳过该图层");
+      state.currentSpineLayers = remaining;
+      loadCurrent(0);
+      return;
+    }
+    showLoadError("该立绘的骨架文件无法解析（" + failedName + "），文件可能已损坏");
+  }
+
   function destroyOne(player) {
     if (!player) return;
     try {
@@ -609,13 +691,8 @@ var thumbBox = el("div", "thumb-box");
     }
     var container = player.parent;
     if (container && container.parentNode) container.parentNode.removeChild(container);
-    if (player.assetManager) {
-      try {
-        player.assetManager.dispose();
-      } catch (err) {
-        /* 忽略 */
-      }
-    }
+    // 不主动 dispose GL 资源: 后台标签页 rAF 被暂停时, 已排队的 drawFrame 会在
+    // 资源释放后恢复执行, 触发 "bindTexture: deleted object" 等崩溃; 移除 DOM 后交给 GC
   }
 
   function destroyPlayer() {
@@ -682,18 +759,58 @@ var thumbBox = el("div", "thumb-box");
         applyTransform();
       },
       error: function (reason) {
-        if (token === state.token) showLoadError("资源加载失败：" + reason);
+        if (token !== state.token || !player) return;
+        var msg = String(reason || "");
+        // 运行库在骨架解析失败时每帧都会重调 showError, 这里只打标记,
+        // 由 whenReady 轮询检测 broken 层后统一走 swapBrokenLayer 降级
+        if (msg.indexOf("could not load skeleton") >= 0) {
+          player.__parseFailed = true;
+          return;
+        }
+        showLoadError("资源加载失败：" + msg);
       }
     });
   }
 
 function layerRank(item) {
-    var name = String((item && item.skelName) || "").replace(/\.[^.]+$/, "");
-    if (/_hx$/i.test(name)) return 4;
+    var name = String((item && item.skelName) || "").replace(/\.[^.]+$/, "").replace(/_hx$/i, "");
     if (/T$/i.test(name)) return 3;
     if (/M$/i.test(name)) return 1;
     if (/B$/i.test(name)) return 0;
     return 2;
+  }
+
+  function buildRenderLayers(spines, selectedSkel) {
+    // _hx (和谐) 层是对应基础层的替代版本而非叠加层;
+    // 同屏渲染两个相同骨架会引发视口竞态与解析失败, 每组只保留一个变体:
+    // 用户选中该组时用选中变体, 否则用基础层 (无基础层时回退和谐层)
+    var selStem = String(selectedSkel || "").replace(/\.skel$/i, "").replace(/_hx$/i, "");
+    var groups = {};
+    var order = [];
+    (spines || []).forEach(function (item) {
+      if (!item) return;
+      var isHx = /_hx\.skel$/i.test(item.skelName);
+      var stem = String(item.skelName).replace(/\.skel$/i, "").replace(/_hx$/i, "");
+      if (!groups[stem]) {
+        groups[stem] = { base: null, hx: null };
+        order.push(stem);
+      }
+      if (isHx) {
+        if (!groups[stem].hx) groups[stem].hx = item;
+      } else {
+        if (!groups[stem].base) groups[stem].base = item;
+      }
+    });
+    var result = [];
+    order.forEach(function (stem) {
+      var g = groups[stem];
+      if (stem === selStem && g.hx && /_hx\.skel$/i.test(String(selectedSkel || ""))) {
+        result.push(g.hx);
+      } else {
+        result.push(g.base || g.hx);
+      }
+    });
+    return result.filter(Boolean);
   }
 
   function startPlayer(token) {
@@ -725,10 +842,19 @@ function layerRank(item) {
   }
 
   function showLoadError(message) {
-    var box = el("div", "spine-player-error", message);
+    var old = dom.canvasHost.querySelectorAll(".load-error-overlay");
+    for (var i = 0; i < old.length; i++) {
+      if (old[i].parentNode) old[i].parentNode.removeChild(old[i]);
+    }
+    var box = el("div", "spine-player-error load-error-overlay", message + "（点击此处重试）");
+    box.title = "点击重试";
+    box.style.cursor = "pointer";
     box.style.position = "absolute";
     box.style.inset = "0";
     box.style.zIndex = "6";
+    box.addEventListener("click", function () {
+      loadCurrent(0);
+    });
     dom.canvasHost.appendChild(box);
     toast(message);
   }
@@ -765,7 +891,10 @@ function layerRank(item) {
     dom.empty.classList.add("is-hidden");
   }
 
-  function loadCurrent() {
+  var LOAD_RETRY_MAX = 2;
+
+  function loadCurrent(retryCount) {
+    var retries = retryCount || 0;
     var token = ++state.token;
     renderCrumbs();
     renderSkinStrip();
@@ -783,7 +912,17 @@ function layerRank(item) {
       .catch(function (err) {
         if (state.token !== token) return;
         if (err && err.message === "superseded") return;
-        showLoadError(err && err.message ? err.message : "加载失败");
+        // 资源加载偶发失败 (本地服务瞬时 404/连接中断等) 时自动重试
+        var msg = err && err.message ? err.message : "加载失败";
+        var isLoadError = msg.indexOf("资源加载失败") === 0 || msg === "加载超时" || msg === "资源解析失败";
+        if (isLoadError && retries < LOAD_RETRY_MAX) {
+          toast("加载失败，正在重试 (" + (retries + 1) + "/" + LOAD_RETRY_MAX + ")…");
+          setTimeout(function () {
+            if (state.token === token) loadCurrent(retries + 1);
+          }, 500);
+          return;
+        }
+        showLoadError(msg);
       });
   }
 
@@ -995,7 +1134,9 @@ opt.appendChild(el("span", null, layerLabel(spineItem.skelName, skin.key) || "�
     if (!skin || !skin.spines[index]) return;
     state.spineIdx = index;
     state.currentSpine = skin.spines[index];
+    state.currentSpineLayers = buildRenderLayers(skin.spines, state.currentSpine && state.currentSpine.skelName);
     state.decisions[ship.key] = { skin: skin, spine: state.currentSpine };
+    state.failedSkels = {};
     loadCurrent();
     renderList();
     saveState();
@@ -1012,8 +1153,9 @@ opt.appendChild(el("span", null, layerLabel(spineItem.skelName, skin.key) || "�
     state.skinKey = skinKey;
     state.spineIdx = Math.min(spineIdx || 0, skin.spines.length - 1);
     state.currentSpine = skin.spines[state.spineIdx];
-    state.currentSpineLayers = skin.spines.slice();
+    state.currentSpineLayers = buildRenderLayers(skin.spines, state.currentSpine && state.currentSpine.skelName);
     state.decisions[shipKey] = { skin: skin, spine: state.currentSpine };
+    state.failedSkels = {};
     loadCurrent();
     renderList();
     updateNav();
