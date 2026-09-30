@@ -4,22 +4,31 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>碧蓝航线 · 动态立绘预览 | azurlane_spinepainting</title>
-  <meta name="description" content="碧蓝航线动态立绘（Spine）在线预览工具，支持搜索、换装、动作切换与缩放查看。">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%234cc9f0'/%3E%3Cstop offset='1' stop-color='%23ff8fd0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='26' fill='url(%23g)'/%3E%3Ctext x='50' y='68' font-size='52' text-anchor='middle' fill='%23081020' font-family='sans-serif'%3E%E7%A2%A7%3C/text%3E%3C/svg%3E">
+  <title>碧蓝航线 · 动态立绘预览 | 婚礼白</title>
+  <meta name="description" content="碧蓝航线动态立绘（Spine 3.8）本地预览工具，婚礼白主题，支持搜索、动作切换、图层切换、缩放与截图。">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3CradialGradient id='g' cx='0.35' cy='0.28' r='0.9'%3E%3Cstop offset='0' stop-color='%23fffdf8'/%3E%3Cstop offset='0.55' stop-color='%23fdf1dd'/%3E%3Cstop offset='1' stop-color='%23e3c79b'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='50' fill='url(%23g)'/%3E%3Crect x='4' y='4' width='92' height='92' rx='46' fill='none' stroke='%23c9a86a' stroke-width='2'/%3E%3Ctext x='50' y='68' font-size='50' text-anchor='middle' fill='%23a9863f' font-family='Georgia,serif'%3E%E7%A2%A7%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="./style.css">
 </head>
 
-<body>
+<body class="theme-wedding-white">
   <div class="app" id="app">
     <aside class="sidebar" id="sidebar">
       <div class="brand">
-        <div class="brand-logo">碧</div>
+        <div class="brand-logo"><span>碧</span></div>
         <div class="brand-text">
+          <span class="brand-kicker">Azur Lane · Spine Gallery</span>
           <h1>动态立绘预览</h1>
           <p>azurlane_spinepainting</p>
         </div>
         <button class="icon-btn" id="closeSidebar" type="button" title="收起列表">✕</button>
+      </div>
+
+      <div class="side-ornament" aria-hidden="true">
+        <span class="line"></span>
+        <span class="gem"></span>
+        <span class="ring"></span>
+        <span class="gem"></span>
+        <span class="line"></span>
       </div>
 
       <div class="search-box">
@@ -39,13 +48,33 @@
       </div>
 
       <div class="ship-list" id="shipList"></div>
+
+      <div class="side-foot">
+        <span class="hint" id="sideHint">婚礼白 · 本地画廊</span>
+        <a class="link" href="../index.html">资源索引</a>
+      </div>
     </aside>
 
     <main class="stage">
       <div class="canvas-host" id="canvasHost"></div>
 
+      <div class="stage-frame" aria-hidden="true">
+        <span class="stud tl"></span>
+        <span class="stud tr"></span>
+        <span class="stud bl"></span>
+        <span class="stud br"></span>
+        <svg class="crown" viewBox="0 0 46 24" fill="none" stroke="rgba(201,168,106,0.7)" stroke-width="1.2"
+          stroke-linecap="round">
+          <path d="M23 2 L27 9 L34 5 L32 15 L46 13" opacity="0.45"></path>
+          <path d="M23 2 L19 9 L12 5 L14 15 L0 13" opacity="0.45"></path>
+          <circle cx="23" cy="2" r="1.8" fill="rgba(201,168,106,0.55)" stroke="none"></circle>
+          <circle cx="34" cy="5" r="1.2" fill="rgba(235,196,210,0.8)" stroke="none"></circle>
+          <circle cx="12" cy="5" r="1.2" fill="rgba(235,196,210,0.8)" stroke="none"></circle>
+        </svg>
+      </div>
+
       <div class="empty" id="empty">
-        <div class="logo-big">碧</div>
+        <div class="logo-big"><span>碧</span></div>
         <h2>选择一个舰娘，开始预览</h2>
         <p>左侧为资源索引，点击任意舰娘即可加载其 Spine 动态立绘。所有资源均直接读取仓库内的 <code>.skel / .atlas / .png</code>，浏览器本地实时渲染。</p>
         <div class="keys">
@@ -60,7 +89,16 @@
         </div>
       </div>
 
-      <div class="hud" id="hud"></div>
+<div class="hud" id="hud"></div>
+
+      <div class="local-notice" id="localNotice" hidden>
+        <span class="ln-dot" aria-hidden="true"></span>
+        <div class="ln-text">
+          <strong>本地直开模式</strong>
+          <span>索引与缩略图已就绪。若动态立绘无法加载，请改用仓库根目录的 <code>start-local-preview.cmd</code> 打开。</span>
+        </div>
+        <button class="ln-btn" id="localNoticeClose" type="button">知道了</button>
+      </div>
 
       <div class="stage-bar">
         <div class="skin-strip" id="skinStrip"></div>
@@ -75,7 +113,7 @@
               <span class="label" id="animLabel">动作</span> ▾
             </button>
             <div class="popup-panel" id="animPanel">
-              <div class="popup-head">动画列表</div>
+              <div class="popup-head">Animation · 动作列表</div>
               <div class="popup-list" id="animList"></div>
             </div>
           </div>
@@ -85,7 +123,7 @@
               <span class="label" id="spineLabel">图层</span> ▾
             </button>
             <div class="popup-panel" id="spinePanel">
-              <div class="popup-head">立绘图层</div>
+              <div class="popup-head">Layers · 立绘图层</div>
               <div class="popup-list" id="spineList"></div>
             </div>
           </div>
@@ -100,6 +138,7 @@
     </main>
   </div>
 
+  <script src="./load-time-data.js"></script>
   <script src="./vendor/spine-player.js"></script>
   <script src="./app.js"></script>
 </body>

@@ -5,9 +5,12 @@
 (function () {
   "use strict";
 
-  var INDEX_URL = "../index.json";
+var INDEX_URL = "../index.json";
+  var LOCAL_DATA_URL = "./index.local.js";
   var UNAVAILABLE = "暂无数据";
   var WAIT_TIMEOUT = 20000;
+  var IS_FILE = location.protocol === "file:";
+  var DATA_STATE = "loading";
 
   var ANIM_ALIASES = [
     { re: /^(idle|default|stand|normal|loop)$/i, name: "待机" },
@@ -47,8 +50,11 @@
     animList: document.getElementById("animList"),
     btnSpines: document.getElementById("btnSpines"),
     spineLabel: document.getElementById("spineLabel"),
-    spinePanel: document.getElementById("spinePanel"),
+spinePanel: document.getElementById("spinePanel"),
     spineList: document.getElementById("spineList"),
+sideHint: document.getElementById("sideHint"),
+    localNotice: document.getElementById("localNotice"),
+    localNoticeClose: document.getElementById("localNoticeClose"),
     toast: document.getElementById("toast")
   };
 
@@ -70,6 +76,11 @@
     pinchDist: 0,
     pinchZoom: 1,
     renderer: null,
+    players: [],
+    readyCount: 0,
+    baseX: 0,
+    baseY: 0,
+    baseZoom: 1,
     anims: [],
     decisions: {},
     saved: null,
@@ -90,8 +101,30 @@
     while (node.firstChild) node.removeChild(node.firstChild);
   }
 
-  function pretty(name) {
+function pretty(name) {
     return String(name).replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+function updateSideHint(isError) {
+    if (!dom.sideHint) return;
+    if (isError) {
+      dom.sideHint.textContent = "数据未就绪";
+      return;
+    }
+    if (DATA_STATE === "local") {
+      dom.sideHint.textContent = "本地直开 · 已内联索引";
+    } else if (DATA_STATE === "inline") {
+      dom.sideHint.textContent = "本地服务 · 已内联索引";
+    } else if (IS_FILE) {
+      dom.sideHint.textContent = "本地直开模式";
+    } else {
+      dom.sideHint.textContent = "婚礼白 · 本地画廊";
+    }
+  }
+
+  function updateLocalNotice() {
+    if (!dom.localNotice) return;
+    dom.localNotice.hidden = !(IS_FILE && DATA_STATE === "local");
   }
 
   function animLabel(name) {
@@ -147,7 +180,7 @@ function layerLabel(name, skinKey) {
 
   function currentZoom() {
     var cam = camera();
-    return cam ? cam.zoom / state.zoom : 0;
+    return cam ? cam.zoom : 0;
   }
 
   function applyZoomAt(factor, origin) {
@@ -174,9 +207,17 @@ function layerLabel(name, skinKey) {
   function applyTransform() {
     var cam = camera();
     if (!cam) return;
-    cam.position.x += state.panX;
-    cam.position.y += state.panY;
-    cam.zoom *= state.zoom;
+    cam.position.x = (state.baseX || 0) + state.panX;
+    cam.position.y = (state.baseY || 0) + state.panY;
+    cam.zoom = (state.baseZoom || 1) * state.zoom;
+  }
+
+  function captureBase() {
+    var cam = camera();
+    if (!cam) return;
+    state.baseX = cam.position.x;
+    state.baseY = cam.position.y;
+    state.baseZoom = cam.zoom || 1;
   }
 
   function resetView(silent) {
@@ -288,9 +329,24 @@ function layerLabel(name, skinKey) {
 
   /* ---------------- 数据：索引 / 筛选 / 列表 ---------------- */
 
-  function loadIndex() {
+function loadIndex() {
+    var inline = window.__SPINE_INDEX__;
+    if (inline && typeof inline === "object" && Object.keys(inline).length) {
+      DATA_STATE = "inline";
+      return Promise.resolve(inline);
+    }
+    if (IS_FILE) {
+      var local = window.__SPINE_INDEX_LOCAL__;
+      if (local && typeof local === "object" && Object.keys(local).length) {
+        DATA_STATE = "local";
+        return Promise.resolve(local);
+      }
+      DATA_STATE = "blocked";
+      return Promise.reject(new Error("本地直开模式下浏览器禁止读取 index.json"));
+    }
     return fetch(INDEX_URL, { cache: "no-cache" }).then(function (response) {
       if (!response.ok) throw new Error("HTTP " + response.status);
+      DATA_STATE = "fetch";
       return response.json();
     });
   }
@@ -408,8 +464,10 @@ function layerLabel(name, skinKey) {
       btn.type = "button";
       btn.addEventListener("click", function () {
         state.activeChip = chip.key;
-        renderChips();
+renderChips();
         applyFilter();
+        updateSideHint(false);
+        updateLocalNotice();
         saveState();
       });
       dom.chips.appendChild(btn);
@@ -436,6 +494,8 @@ function layerLabel(name, skinKey) {
       btn.type = "button";
       btn.dataset.key = ship.key;
 
+var thumbBox = el("div", "thumb-box");
+      var initial = String(ship.chName || ship.key || "?").trim().slice(0, 1);
       if (decision.spine && decision.skin) {
         var img = el("img", "ship-thumb");
         img.loading = "lazy";
@@ -443,17 +503,12 @@ function layerLabel(name, skinKey) {
         img.alt = "";
         img.src = "../" + ship.key + "/" + decision.skin.key + "/" + decision.spine.pages[0];
         img.addEventListener("error", function () {
-          if (img.dataset.retried) return;
-          img.dataset.retried = "1";
-          img.classList.add("is-fallback");
-          if (decision.spine.pages.length > 1) {
-            img.src = "../" + ship.key + "/" + decision.skin.key + "/" + decision.spine.pages[1];
-          }
+          if (img.parentNode) img.parentNode.removeChild(img);
         });
-        btn.appendChild(img);
-      } else {
-        btn.appendChild(el("div", "ship-thumb"));
+        thumbBox.appendChild(img);
       }
+      thumbBox.appendChild(el("div", "thumb-ph", initial));
+      btn.appendChild(thumbBox);
 
       var info = el("div", "ship-info");
       info.appendChild(el("div", "ship-name", ship.chName + (ship.hxName ? " · " + ship.hxName : "")));
@@ -494,15 +549,40 @@ function layerLabel(name, skinKey) {
           reject(new Error("superseded"));
           return;
         }
-var player = state.player;
-        if (player && player.assetManager && player.assetManager.isLoadingComplete()) {
-          if (player.skeleton && player.animationState) {
-            resolve(player);
-          } else if (player.assetManager.hasErrors()) {
+        var list = state.players && state.players.length ? state.players : state.player ? [state.player] : [];
+        var player = state.player;
+        if (!list.length) {
+          setTimeout(poll, 60);
+          return;
+        }
+        var allDone = true;
+        for (var i = 0; i < list.length; i++) {
+          var p = list[i];
+          if (!(p.assetManager && p.assetManager.isLoadingComplete())) {
+            allDone = false;
+            break;
+          }
+        }
+        if (allDone) {
+          var broken = false;
+          for (var j = 0; j < list.length; j++) {
+            if (!(list[j].skeleton && list[j].animationState)) broken = true;
+          }
+          if (!broken) {
+            fitUnionViewport();
+            captureBase();
+            applyTransform();
+            if (player) resolve(player);
+            else reject(new Error("资源解析失败"));
+          } else if (player && player.assetManager && player.assetManager.hasErrors()) {
             reject(new Error("资源解析失败"));
           } else {
             setTimeout(poll, 60);
           }
+          return;
+        }
+        if (player && player.assetManager && player.assetManager.hasErrors()) {
+          reject(new Error("资源解析失败"));
           return;
         }
         if (Date.now() - started > WAIT_TIMEOUT) {
@@ -514,10 +594,7 @@ var player = state.player;
     });
   }
 
-  function destroyPlayer() {
-    var player = state.player;
-    state.player = null;
-    state.renderer = null;
+  function destroyOne(player) {
     if (!player) return;
     try {
       player.stopRequestAnimationFrame = true;
@@ -535,28 +612,53 @@ var player = state.player;
     }
   }
 
-  function showLoadError(message) {
-    var box = el("div", "spine-player-error", message);
-    box.style.position = "absolute";
-    box.style.inset = "0";
-    box.style.zIndex = "6";
-    dom.canvasHost.appendChild(box);
-    toast(message);
+  function destroyPlayer() {
+    var list = state.players || [];
+    for (var i = 0; i < list.length; i++) destroyOne(list[i]);
+    state.players = [];
+    state.player = null;
+    state.renderer = null;
+    state.readyCount = 0;
+    state.errored = 0;
   }
 
-  function startPlayer(token) {
-    var base = "../" + state.shipKey + "/" + state.skinKey + "/";
-    var spineItem = state.currentSpine;
-    if (!spineItem) return;
+  function fitUnionViewport() {
+    var list = state.players || [];
+    if (!list.length) return;
+    var ready = [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].skeleton && list[i].skeleton.data) ready.push(list[i]);
+    }
+    if (ready.length !== list.length) return;
 
-    destroyPlayer();
-    var container = el("div");
-    container.style.position = "absolute";
-    container.style.inset = "0";
-    dom.canvasHost.appendChild(container);
-    resetView(true);
+    var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    ready.forEach(function (p) {
+      var d = p.skeleton.data;
+      x1 = Math.min(x1, d.x);
+      y1 = Math.min(y1, d.y);
+      x2 = Math.max(x2, d.x + d.width);
+      y2 = Math.max(y2, d.y + d.height);
+    });
+    var vw = x2 - x1, vh = y2 - y1;
+    if (!(vw > 0) || !(vh > 0)) return;
 
-    state.player = new spine.SpinePlayer(container, {
+    ready.forEach(function (p) {
+      p.config.viewport = {
+        x: x1,
+        y: y1,
+        width: vw,
+        height: vh,
+        padLeft: 0,
+        padRight: 0,
+        padTop: 0,
+        padBottom: 0,
+        transitionTime: 0.0001
+      };
+    });
+  }
+
+  function makeOne(container, base, spineItem, token) {
+    return new spine.SpinePlayer(container, {
       skelUrl: base + spineItem.skelName,
       atlasUrl: base + spineItem.atlasName,
       showControls: false,
@@ -565,19 +667,64 @@ var player = state.player;
       fullScreenBackgroundColor: "#00000000",
       premultipliedAlpha: true,
       defaultMix: 0.25,
-      success: function () {
-        var player = state.player;
-        if (token === state.token && player) {
-          state.renderer = player.sceneRenderer;
-          applyTransform();
-        }
+      success: function (player) {
+        if (token !== state.token || !player) return;
+        state.readyCount = (state.readyCount || 0) + 1;
+        if (!state.renderer && player.sceneRenderer) state.renderer = player.sceneRenderer;
+        fitUnionViewport();
+        captureBase();
+        applyTransform();
       },
       error: function (reason) {
         if (token === state.token) showLoadError("资源加载失败：" + reason);
       }
     });
-    state.renderer = state.player.sceneRenderer;
-    applyTransform();
+  }
+
+function layerRank(item) {
+    var name = String((item && item.skelName) || "").replace(/\.[^.]+$/, "");
+    if (/_hx$/i.test(name)) return 4;
+    if (/T$/i.test(name)) return 3;
+    if (/M$/i.test(name)) return 1;
+    if (/B$/i.test(name)) return 0;
+    return 2;
+  }
+
+  function startPlayer(token) {
+    var base = "../" + state.shipKey + "/" + state.skinKey + "/";
+    var layers =
+      state.currentSpineLayers && state.currentSpineLayers.length
+        ? state.currentSpineLayers
+        : [state.currentSpine];
+    if (!layers.length || !layers[0]) return;
+
+    destroyPlayer();
+    state.players = [];
+    resetView(true);
+
+    var ordered = layers.filter(Boolean).slice().sort(function (a, b) {
+      return layerRank(a) - layerRank(b);
+    });
+
+    ordered.forEach(function (item, index) {
+      var container = el("div", "layer");
+      container.style.position = "absolute";
+      container.style.inset = "0";
+      container.style.zIndex = String(index + 1);
+      dom.canvasHost.appendChild(container);
+      var p = makeOne(container, base, item, token);
+      state.players.push(p);
+      if (index === 0) state.player = p;
+    });
+  }
+
+  function showLoadError(message) {
+    var box = el("div", "spine-player-error", message);
+    box.style.position = "absolute";
+    box.style.inset = "0";
+    box.style.zIndex = "6";
+    dom.canvasHost.appendChild(box);
+    toast(message);
   }
 
   function onPlayerReady(player) {
@@ -782,19 +929,40 @@ opt.appendChild(el("span", null, layerLabel(spineItem.skelName, skin.key) || "�
     });
   }
 
+  function eachPlayer(fn) {
+    var list = state.players && state.players.length ? state.players : state.player ? [state.player] : [];
+    list.forEach(function (p) {
+      try {
+        fn(p);
+      } catch (err) {
+        /* 忽略 */
+      }
+    });
+  }
+
   function playAnimation(name) {
-    var player = state.player;
-    if (!player || !player.animationState) return;
+    var main = state.player;
+    if (!main || !main.animationState) return;
+    var ok = false;
     try {
-      player.setAnimation(name);
-      player.config.animation = name;
+      main.setAnimation(name);
+      main.config.animation = name;
+      ok = true;
     } catch (err) {
       toast("无法播放该动作");
       return;
     }
+    if (!ok) return;
+    eachPlayer(function (p) {
+      if (p === main) return;
+      if ((p.skeleton.data.animations || []).some(function (a) { return a.name === name; })) {
+        p.setAnimation(name);
+        p.config.animation = name;
+      }
+    });
     dom.animLabel.textContent = animLabel(name);
     renderAnimList(name);
-    if (player.paused) player.play();
+    if (main.paused) eachPlayer(function (p) { p.play(); });
     dom.btnToggle.textContent = "⏸";
     dom.btnToggle.classList.add("is-active");
     resetView(true);
@@ -823,6 +991,7 @@ opt.appendChild(el("span", null, layerLabel(spineItem.skelName, skin.key) || "�
     state.skinKey = skinKey;
     state.spineIdx = Math.min(spineIdx || 0, skin.spines.length - 1);
     state.currentSpine = skin.spines[state.spineIdx];
+    state.currentSpineLayers = skin.spines.slice();
     state.decisions[shipKey] = { skin: skin, spine: state.currentSpine };
     loadCurrent();
     renderList();
@@ -902,11 +1071,11 @@ opt.appendChild(el("span", null, layerLabel(spineItem.skelName, skin.key) || "�
         playAnimation(state.anims[0]);
         return;
       }
-      player.play();
+      eachPlayer(function (p) { p.play(); });
       dom.btnToggle.textContent = "⏸";
       dom.btnToggle.classList.add("is-active");
     } else {
-      player.pause();
+      eachPlayer(function (p) { p.pause(); });
       dom.btnToggle.textContent = "▶";
       dom.btnToggle.classList.remove("is-active");
     }
@@ -1008,9 +1177,15 @@ opt.appendChild(el("span", null, layerLabel(spineItem.skelName, skin.key) || "�
     dom.openSidebar.addEventListener("click", function () {
       dom.app.classList.add("sidebar-open");
     });
-    dom.closeSidebar.addEventListener("click", function () {
+dom.closeSidebar.addEventListener("click", function () {
       dom.app.classList.remove("sidebar-open");
     });
+
+    if (dom.localNoticeClose) {
+      dom.localNoticeClose.addEventListener("click", function () {
+        dom.localNotice.hidden = true;
+      });
+    }
     dom.app.addEventListener("click", function (event) {
       if (event.target === dom.app) dom.app.classList.remove("sidebar-open");
     });
@@ -1102,8 +1277,10 @@ opt.appendChild(el("span", null, layerLabel(spineItem.skelName, skin.key) || "�
           }
           if (state.saved.chip) state.activeChip = state.saved.chip;
         }
-        renderChips();
+renderChips();
         applyFilter();
+        updateSideHint(false);
+        updateLocalNotice();
 
         var initial = null;
         if (state.saved && state.saved.ship) initial = getShip(state.saved.ship);
@@ -1121,16 +1298,30 @@ opt.appendChild(el("span", null, layerLabel(spineItem.skelName, skin.key) || "�
           scrollToActive();
         }
       })
-      .catch(function (err) {
+.catch(function (err) {
         dom.listMeta.textContent = "索引加载失败";
         dom.listHint.textContent = "";
         var box = el("div", "list-empty");
         box.style.whiteSpace = "pre-line";
-        box.textContent =
-          "无法读取 ../index.json\n" +
-          (err && err.message ? err.message : "") +
-          "\n请通过 Web 服务器（如 GitHub Pages）打开本页面。";
+        var reason = err && err.message ? err.message : "";
+if (DATA_STATE === "blocked") {
+          box.textContent =
+            "本地直开模式下未能获取 index.json 数据\n\n" +
+            "可能原因：\n" +
+            "1. 内联数据文件尚未生成（docs/player/index.local.js）\n" +
+            "2. 浏览器出于安全策略拦截了本地文件读取\n\n" +
+            "解决办法（任选其一）：\n" +
+            "1. 生成内联数据：python tools/build-player-data.py\n" +
+            "2. 双击仓库根目录的 start-local-preview.cmd\n" +
+            "3. 手动启动服务：python -m http.server 13383 --directory docs";
+        } else {
+          box.textContent =
+            "无法读取 ../index.json\n" +
+            reason +
+            "\n请通过本地服务或 GitHub Pages 打开本页面。";
+        }
         dom.shipList.appendChild(box);
+        updateSideHint(true);
       });
   }
 
