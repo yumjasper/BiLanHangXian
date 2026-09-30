@@ -881,9 +881,11 @@ function layerRank(item) {
       dom.animLabel.textContent = "无动作";
     }
 
-    player.paused = true;
-    dom.btnToggle.textContent = "▶";
-    dom.btnToggle.classList.remove("is-active");
+    /* 默认自动播放：加载完成后立即播放待机动作 */
+    player.paused = false;
+    eachPlayer(function (p) { p.play(); });
+    dom.btnToggle.textContent = "⏸";
+    dom.btnToggle.classList.add("is-active");
 
     resetView(true);
     renderAnimList(preferred);
