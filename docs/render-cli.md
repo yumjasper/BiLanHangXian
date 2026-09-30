@@ -20,6 +20,22 @@
 - Chrome 或 Edge 任一（自动探测，无需安装 Playwright）
 - 无头模式，不打扰你的正常浏览
 
+## 本地服务
+
+CLI 需要访问本地静态服务才能读取资源。仓库根目录的 `start.bat` 可一键启动（双击即可）：
+
+- 服务地址 `http://127.0.0.1:13383`，根目录为 `docs/`
+- 优先用 Python，未安装则回退 Node
+- 端口已占用时直接复用，不重复启动
+
+也可以手动启动，CLI 会自动复用已运行的服务：
+
+```bash
+python -m http.server 13383 --directory docs --bind 127.0.0.1
+```
+
+不要以 `file://` 协议直接打开页面，浏览器会因 CORS 拒绝读取 `.skel` / `.atlas` / `.png`。
+
 ## 用法
 
 ```bash
