@@ -75,6 +75,7 @@ sideHint: document.getElementById("sideHint"),
     pointers: {},
     pinchDist: 0,
     pinchZoom: 1,
+    lastPan: null,
     renderer: null,
     players: [],
     readyCount: 0,
@@ -174,51 +175,119 @@ function layerLabel(name, skinKey) {
   }
 
   /* ---------------- 相机：缩放与平移 ---------------- */
+  /* 注意：spine-player 的 drawFrame 每帧都会用 currentViewport 重算相机，
+     直接改 camera 会被覆盖，因此这里统一改写 currentViewport。 */
 
-  function camera() {
-    return state.renderer && state.renderer.camera ? state.renderer.camera : null;
+  function eachPlayer(fn) {
+    var list = state.players && state.players.length ? state.players : state.player ? [state.player] : [];
+    list.forEach(function (p) {
+      try {
+        fn(p);
+      } catch (err) {
+        /* 忽略 */
+      }
+    });
   }
 
-  function currentZoom() {
-    var cam = camera();
-    return cam ? cam.zoom : 0;
+  function captureBase() {
+    var p = state.player || (state.players && state.players[0]);
+    if (!p) return;
+    state.lastPan = null;
+    var cv = p.config && p.config.viewport;
+    if (cv && typeof cv.x === "number" && cv.width > 0) {
+      state.baseViewport = {
+        x: cv.x,
+        y: cv.y,
+        width: cv.width,
+        height: cv.height,
+        padLeft: cv.padLeft || 0,
+        padRight: cv.padRight || 0,
+        padBottom: cv.padBottom || 0,
+        padTop: cv.padTop || 0
+      };
+    } else if (p.currentViewport) {
+      var vp = p.currentViewport;
+      state.baseViewport = {
+        x: vp.x - (vp.padLeft || 0),
+        y: vp.y - (vp.padBottom || 0),
+        width: vp.width + (vp.padLeft || 0) + (vp.padRight || 0),
+        height: vp.height + (vp.padBottom || 0) + (vp.padTop || 0),
+        padLeft: vp.padLeft || 0,
+        padRight: vp.padRight || 0,
+        padBottom: vp.padBottom || 0,
+        padTop: vp.padTop || 0
+      };
+    }
+  }
+
+  function applyTransform() {
+    var base = state.baseViewport;
+    if (!base) return;
+    eachPlayer(function (p) {
+      var vp = p.currentViewport;
+      if (!vp) return;
+      var pl = vp.padLeft || 0;
+      var pr = vp.padRight || 0;
+      var pb = vp.padBottom || 0;
+      var pt = vp.padTop || 0;
+      var w = base.width / state.zoom;
+      var h = base.height / state.zoom;
+      var cx = base.x + base.width / 2 + state.panX;
+      var cy = base.y + base.height / 2 + state.panY;
+      vp.width = w - pl - pr;
+      vp.height = h - pb - pt;
+      vp.x = cx - w / 2 + pl;
+      vp.y = cy - h / 2 + pb;
+    });
+  }
+
+  function viewMetrics() {
+    var base = state.baseViewport;
+    if (!base) return null;
+    var host = dom.canvasHost;
+    var cw = host.clientWidth || 1;
+    var ch = host.clientHeight || 1;
+    var vw = base.width / state.zoom;
+    var vh = base.height / state.zoom;
+    /* 播放器以 contain 等比适配视口到画布 (scale 取小值, 居中绘制) */
+    var s = Math.min(cw / vw, ch / vh);
+    return { cw: cw, ch: ch, wpp: 1 / s };
+  }
+
+  function visibleCenter() {
+    var base = state.baseViewport;
+    return {
+      x: base.x + base.width / 2 + state.panX,
+      y: base.y + base.height / 2 + state.panY
+    };
   }
 
   function applyZoomAt(factor, origin) {
-    var cam = camera();
+    var base = state.baseViewport;
+    if (!base) return;
     var next = Math.max(0.3, Math.min(5, state.zoom * factor));
-    if (!cam || Math.abs(next - state.zoom) < 0.001) return;
-    var host = dom.canvasHost;
-    var unitX = (origin.x - host.clientWidth / 2) * currentZoom();
-    var unitY = -(origin.y - host.clientHeight / 2) * currentZoom();
-    var ratio = state.zoom / next;
-    state.panX += unitX * (1 - ratio);
-    state.panY += unitY * (1 - ratio);
+    if (Math.abs(next - state.zoom) < 0.001) return;
+    var m0 = viewMetrics();
+    var c0 = visibleCenter();
+    /* 光标下的世界坐标 (屏幕 y 向下, 世界 y 向上) */
+    var wx = c0.x + (origin.x - m0.cw / 2) * m0.wpp;
+    var wy = c0.y - (origin.y - m0.ch / 2) * m0.wpp;
     state.zoom = next;
+    var m1 = viewMetrics();
+    /* 缩放后让同一世界坐标仍停留在光标下 */
+    var cx = wx - (origin.x - m1.cw / 2) * m1.wpp;
+    var cy = wy + (origin.y - m1.ch / 2) * m1.wpp;
+    state.panX = cx - (base.x + base.width / 2);
+    state.panY = cy - (base.y + base.height / 2);
     applyTransform();
   }
 
   function panBy(dx, dy) {
-    var unit = currentZoom();
-    state.panX -= dx * unit;
-    state.panY += dy * unit;
+    var m = viewMetrics();
+    if (!m) return;
+    state.panX -= dx * m.wpp;
+    state.panY += dy * m.wpp;
     applyTransform();
-  }
-
-  function applyTransform() {
-    var cam = camera();
-    if (!cam) return;
-    cam.position.x = (state.baseX || 0) + state.panX;
-    cam.position.y = (state.baseY || 0) + state.panY;
-    cam.zoom = (state.baseZoom || 1) * state.zoom;
-  }
-
-  function captureBase() {
-    var cam = camera();
-    if (!cam) return;
-    state.baseX = cam.position.x;
-    state.baseY = cam.position.y;
-    state.baseZoom = cam.zoom || 1;
   }
 
   function resetView(silent) {
@@ -249,37 +318,52 @@ function layerLabel(name, skinKey) {
       return Math.sqrt(dx * dx + dy * dy);
     }
 
+    function pointerCenter() {
+      var ids = Object.keys(state.pointers);
+      var a = state.pointers[ids[0]];
+      var b = state.pointers[ids[1]];
+      return {
+        x: (a.x + b.x) / 2,
+        y: (a.y + b.y) / 2
+      };
+    }
+
+    /* 滚轮缩放：捕获阶段拦截，防止播放器内部处理 */
     host.addEventListener(
       "wheel",
       function (event) {
         event.preventDefault();
+        event.stopPropagation();
         applyZoomAt(event.deltaY < 0 ? 1.1 : 1 / 1.1, relative(event));
       },
-      { passive: false }
+      { passive: false, capture: true }
     );
 
+    /* 按下在 host 上；移动/抬起在 window 上：即使指针移出画布也持续拖动 */
     host.addEventListener("pointerdown", function (event) {
       if (event.pointerType === "mouse" && event.button !== 0) return;
       var point = relative(event);
       state.pointers[event.pointerId] = point;
+      var ids = Object.keys(state.pointers);
+      if (ids.length >= 2) {
+        state.dragging = false;
+        state.pinchDist = pointerDistance();
+        state.pinchZoom = state.zoom;
+      } else {
+        state.dragging = true;
+        host.classList.add("is-grabbing");
+      }
       try {
         host.setPointerCapture(event.pointerId);
       } catch (err) {
         /* 忽略 */
       }
-      var ids = Object.keys(state.pointers);
-      if (ids.length === 1) {
-        state.dragging = true;
-      } else if (ids.length >= 2) {
-        state.dragging = false;
-        state.pinchDist = pointerDistance();
-        state.pinchZoom = state.zoom;
-      }
-    });
+      event.preventDefault();
+      event.stopPropagation();
+    }, true);
 
-    host.addEventListener("pointermove", function (event) {
-      var prev = state.pointers[event.pointerId];
-      if (!prev) return;
+    window.addEventListener("pointermove", function (event) {
+      if (!state.pointers[event.pointerId]) return;
       var current = relative(event);
       state.pointers[event.pointerId] = current;
       var ids = Object.keys(state.pointers);
@@ -288,12 +372,8 @@ function layerLabel(name, skinKey) {
         var dist = pointerDistance();
         if (state.pinchDist > 0 && dist > 0) {
           var target = Math.max(0.3, Math.min(5, (state.pinchZoom * dist) / state.pinchDist));
-          var center = {
-            x: (state.pointers[ids[0]].x + state.pointers[ids[1]].x) / 2,
-            y: (state.pointers[ids[0]].y + state.pointers[ids[1]].y) / 2
-          };
           if (Math.abs(target - state.zoom) > 0.001) {
-            applyZoomAt(target / state.zoom, center);
+            applyZoomAt(target / state.zoom, pointerCenter());
           }
         }
         event.preventDefault();
@@ -301,25 +381,33 @@ function layerLabel(name, skinKey) {
       }
 
       if (!state.dragging) return;
+      var prev = state.lastPan || current;
       panBy(current.x - prev.x, current.y - prev.y);
+      state.lastPan = current;
       event.preventDefault();
-    });
+    }, { passive: false });
 
     function endPointer(event) {
       if (!state.pointers[event.pointerId]) return;
       delete state.pointers[event.pointerId];
+      state.lastPan = null;
       var ids = Object.keys(state.pointers);
       if (!ids.length) {
         state.dragging = false;
+        host.classList.remove("is-grabbing");
       } else {
         state.dragging = true;
         state.pinchDist = 0;
       }
+      try {
+        host.releasePointerCapture(event.pointerId);
+      } catch (err) {
+        /* 忽略 */
+      }
     }
 
-    host.addEventListener("pointerup", endPointer);
-    host.addEventListener("pointercancel", endPointer);
-    host.addEventListener("pointerleave", endPointer);
+    window.addEventListener("pointerup", endPointer, true);
+    window.addEventListener("pointercancel", endPointer, true);
     host.addEventListener("dblclick", function () {
       resetView();
     });
@@ -1084,17 +1172,6 @@ opt.appendChild(el("span", null, layerLabel(spineItem.skelName, skin.key) || "�
         playAnimation(name);
       });
       dom.animList.appendChild(opt);
-    });
-  }
-
-  function eachPlayer(fn) {
-    var list = state.players && state.players.length ? state.players : state.player ? [state.player] : [];
-    list.forEach(function (p) {
-      try {
-        fn(p);
-      } catch (err) {
-        /* 忽略 */
-      }
     });
   }
 
