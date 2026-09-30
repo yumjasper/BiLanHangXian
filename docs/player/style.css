@@ -1,7 +1,8 @@
 /* ==========================================================================
    碧蓝航线 · 动态立绘预览
-   主题：婚礼白 Wedding White
-   色卡：象牙白 / 珍珠白 / 香槟金 / 腮红粉 / 雾霾蓝
+   主题：华丽婚礼白 Grand Wedding White
+   色卡：象牙白 / 珍珠白 / 香槟金 / 腮红粉 / 珍珠贝母光
+   动效：花瓣飘落 / 光斑闪烁 / 金线流光 / 纱幔帷幕 / 涟漪 / 交错入场
    ========================================================================== */
 
 :root {
@@ -39,6 +40,12 @@
 
   --accent-grad: linear-gradient(135deg, #f9ecd7 0%, #ecd3a8 46%, #c9a86a 100%);
   --accent-ink: #4a3a1e;
+
+  /* 动效时长 */
+  --fx-slow: 0.6s;
+  --fx-mid: 0.35s;
+  --fx-fast: 0.18s;
+  --fx-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
   --radius-lg: 20px;
   --radius-md: 14px;
@@ -1324,6 +1331,495 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+/* ==========================================================================
+   华丽婚礼白 · 动效层
+   ========================================================================== */
+
+.fx-layers {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.fx-petals,
+.fx-bokeh,
+.fx-shimmer {
+  position: absolute;
+  inset: 0;
+}
+
+/* 飘落花瓣（由 JS 生成 DOM） */
+
+.petal {
+  position: absolute;
+  top: -4vh;
+  width: 14px;
+  height: 14px;
+  background: radial-gradient(circle at 30% 30%, #ffffff 0%, #fdeef3 45%, #f3cfdd 78%, #e7b7c9 100%);
+  border-radius: 100% 0 100% 0;
+  opacity: 0;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.85);
+  animation: petal-fall linear infinite;
+}
+
+.petal.gold {
+  background: radial-gradient(circle at 30% 30%, #fffdf6 0%, #f9e8c8 48%, #eed3a0 80%, #ddba7c 100%);
+  border-radius: 100% 0 100% 0;
+}
+
+@keyframes petal-fall {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -5vh, 0) rotate(0deg) scale(0.72);
+  }
+  8% {
+    opacity: 0.85;
+  }
+  50% {
+    transform: translate3d(6vw, 52vh, 0) rotate(190deg) scale(1);
+  }
+  92% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-4vw, 108vh, 0) rotate(390deg) scale(0.8);
+  }
+}
+
+/* 漂浮珍珠光斑 */
+
+.bokeh {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 32%, rgba(255, 255, 255, 0.95) 0%, rgba(249, 232, 200, 0.55) 42%, rgba(235, 196, 210, 0.18) 74%, transparent 100%);
+  filter: blur(1px);
+  animation: bokeh-float ease-in-out infinite alternate, bokeh-blink ease-in-out infinite;
+}
+
+@keyframes bokeh-float {
+  from {
+    transform: translateY(0) translateX(0);
+  }
+  to {
+    transform: translateY(-26px) translateX(14px);
+  }
+}
+
+@keyframes bokeh-blink {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+/* 全屏金线流光（每 9 秒扫过一次的丝绸光泽） */
+
+.fx-shimmer::before {
+  content: "";
+  position: absolute;
+  top: -20%;
+  left: -30%;
+  width: 34vw;
+  height: 140%;
+  background: linear-gradient(
+    104deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0) 30%,
+    rgba(255, 250, 238, 0.5) 46%,
+    rgba(255, 236, 196, 0.38) 52%,
+    rgba(255, 255, 255, 0) 68%,
+    transparent 100%
+  );
+  transform: skewX(-16deg);
+  animation: silk-sweep 9s ease-in-out infinite;
+  mix-blend-mode: screen;
+}
+
+@keyframes silk-sweep {
+  0%,
+  58% {
+    left: -34%;
+    opacity: 0;
+  }
+  62% {
+    opacity: 1;
+  }
+  84% {
+    opacity: 1;
+  }
+  88%,
+  100% {
+    left: 128%;
+    opacity: 0;
+  }
+}
+
+/* 舞台纱幔帷幕（顶部两侧垂落的白纱 + 金流苏） */
+
+.stage-veil {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 0;
+  z-index: 3;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.veil-swag {
+  position: absolute;
+  top: 0;
+  width: 34%;
+  height: 130px;
+  background:
+    radial-gradient(120% 130% at 0% 0%, rgba(255, 255, 255, 0.9) 0%, rgba(253, 244, 230, 0.55) 46%, rgba(240, 220, 189, 0.18) 72%, transparent 96%);
+  border-radius: 0 0 100% 0 / 0 0 120px 0;
+  filter: drop-shadow(0 6px 14px rgba(126, 100, 72, 0.1));
+  transform-origin: top left;
+  animation: veil-sway 7s ease-in-out infinite alternate;
+}
+
+.veil-swag.right {
+  right: 0;
+  border-radius: 0 0 0 100% / 0 0 0 120px;
+  transform-origin: top right;
+  animation-delay: -3.5s;
+}
+
+@keyframes veil-sway {
+  from {
+    transform: rotate(0deg) scaleY(1);
+  }
+  to {
+    transform: rotate(1.4deg) scaleY(1.04);
+  }
+}
+
+.veil-tassel {
+  position: absolute;
+  top: 96px;
+  width: 7px;
+  height: 42px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #c9a86a 0%, #ecd3a8 55%, rgba(236, 211, 168, 0) 100%);
+  box-shadow: 0 0 8px rgba(201, 168, 106, 0.5);
+}
+
+.veil-tassel.left {
+  left: calc(34% - 10px);
+}
+
+.veil-tassel.right {
+  right: calc(34% - 10px);
+}
+
+.veil-tassel::after {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #fff8ea, #c9a86a);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 10px rgba(201, 168, 106, 0.6);
+  animation: tassel-glow 3.2s ease-in-out infinite alternate;
+}
+
+@keyframes tassel-glow {
+  from {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 8px rgba(201, 168, 106, 0.45);
+  }
+  to {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 18px rgba(220, 157, 181, 0.8);
+  }
+}
+
+/* 舞台相框：升级为珍珠贝母流光描边 */
+
+.stage-frame {
+  animation: frame-glow 6s ease-in-out infinite alternate;
+}
+
+@keyframes frame-glow {
+  from {
+    box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.7), 0 20px 54px rgba(126, 100, 72, 0.08),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.6), 0 0 18px rgba(201, 168, 106, 0.1);
+  }
+  to {
+    box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.7), 0 20px 54px rgba(126, 100, 72, 0.08),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.6), 0 0 34px rgba(220, 157, 181, 0.28);
+  }
+}
+
+/* 立绘切换闪光（JS 注入，one-shot） */
+
+.fx-burst {
+  position: absolute;
+  inset: 52px 16px 124px;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 22px;
+}
+
+.burst-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 245, 224, 0.95);
+  box-shadow: 0 0 24px rgba(240, 220, 189, 0.9), inset 0 0 12px rgba(235, 196, 210, 0.7);
+  animation: burst-ring 0.9s var(--fx-spring) forwards;
+}
+
+@keyframes burst-ring {
+  from {
+    opacity: 1;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 0;
+    transform: scale(46);
+  }
+}
+
+.burst-spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #ffffff, #f5d99a 70%, #d9b98a);
+  animation: burst-spark 1s cubic-bezier(0.16, 0.84, 0.44, 1) forwards;
+}
+
+@keyframes burst-spark {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(var(--sx), var(--sy), 0) scale(0.2);
+  }
+}
+
+/* 画布立绘入场：轻盈浮现 + 柔光扫过 */
+
+.canvas-host .layer {
+  animation: art-enter 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes art-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+    filter: blur(6px) brightness(1.18);
+  }
+  60% {
+    filter: blur(0) brightness(1.05);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0) brightness(1);
+  }
+}
+
+/* 侧边栏列表交错入场 */
+
+.ship {
+  animation: item-in 0.5s ease both;
+  animation-delay: calc(var(--i, 0) * 28ms);
+}
+
+@keyframes item-in {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 皮肤胶囊与控件弹性入场 */
+
+.skin-chip {
+  animation: chip-pop 0.45s var(--fx-spring) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+@keyframes chip-pop {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 控件涟漪 */
+
+.ctl,
+.icon-btn,
+.chip,
+.skin-chip {
+  position: relative;
+  overflow: hidden;
+}
+
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(201, 168, 106, 0.4) 0%, rgba(235, 196, 210, 0.28) 45%, transparent 70%);
+  transform: scale(0);
+  animation: ripple-out 0.65s ease-out forwards;
+}
+
+@keyframes ripple-out {
+  to {
+    transform: scale(3.4);
+    opacity: 0;
+  }
+}
+
+/* 鼠标跟随星光（JS 生成，缓慢消散） */
+
+.sparkle {
+  position: fixed;
+  z-index: 60;
+  width: 9px;
+  height: 9px;
+  pointer-events: none;
+  background: radial-gradient(circle at 36% 32%, #ffffff 0%, #f9e8c8 46%, rgba(235, 196, 210, 0.6) 72%, transparent 100%);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  animation: sparkle-fade 0.85s ease-out forwards;
+}
+
+@keyframes sparkle-fade {
+  from {
+    opacity: 0.95;
+    transform: scale(1) rotate(0deg);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.25) rotate(140deg) translateY(-12px);
+  }
+}
+
+/* toast 华丽化：金边 + 顶部珠光 */
+
+.toast {
+  border: 1px solid rgba(201, 168, 106, 0.5);
+  background: linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(253, 244, 230, 0.95));
+  box-shadow: 0 14px 34px rgba(126, 100, 72, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.toast::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201, 168, 106, 0.75), transparent);
+}
+
+/* 品牌徽标珍珠光旋转 */
+
+.brand-logo {
+  animation: logo-shine 8s ease-in-out infinite;
+}
+
+@keyframes logo-shine {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.9), 0 0 0 4px rgba(201, 168, 106, 0.28), 0 10px 22px rgba(169, 134, 63, 0.16);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.9), 0 0 0 4px rgba(220, 157, 181, 0.5), 0 10px 26px rgba(220, 157, 181, 0.32);
+  }
+}
+
+/* 底部控制条装饰丝带端点 */
+
+.stage-bar {
+  position: relative;
+}
+
+.bar-ribbon {
+  position: absolute;
+  top: 50%;
+  width: 70px;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent, rgba(201, 168, 106, 0.55));
+  pointer-events: none;
+}
+
+.bar-ribbon.left {
+  left: max(26px, calc(50% - 340px));
+  transform: translateY(-50%);
+}
+
+.bar-ribbon.right {
+  right: max(26px, calc(50% - 340px));
+  transform: translateY(-50%) scaleX(-1);
+}
+
+.bar-ribbon::after {
+  content: "";
+  position: absolute;
+  top: -3.25px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #fff8ea, #c9a86a);
+  box-shadow: 0 0 8px rgba(201, 168, 106, 0.6);
+  animation: tassel-glow 3.2s ease-in-out infinite alternate;
+}
+
+.bar-ribbon.left::after {
+  right: 0;
+}
+
+.bar-ribbon.right::after {
+  left: 0;
+}
+
+/* bare 模式隐藏全部动效层 */
+
+body.bare-mode .fx-layers,
+body.bare-mode .stage-veil,
+body.bare-mode .fx-burst,
+body.bare-mode .bar-ribbon {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-layers,
+  .stage-veil,
+  .fx-burst {
+    display: none !important;
+  }
+}
+
 /* ==========================================================================
    bare 模式：供 render_cli.py 自动化渲染使用
    隐藏全部界面 UI，只保留立绘舞台，保证输出为纯净的合成立绘。

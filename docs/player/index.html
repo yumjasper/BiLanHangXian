@@ -11,6 +11,11 @@
 </head>
 
 <body class="theme-wedding-white">
+  <div class="fx-layers" aria-hidden="true">
+    <div class="fx-petals" id="fxPetals"></div>
+    <div class="fx-bokeh" id="fxBokeh"></div>
+    <div class="fx-shimmer" id="fxShimmer"></div>
+  </div>
   <div class="app" id="app">
     <aside class="sidebar" id="sidebar">
       <div class="brand">
@@ -56,6 +61,13 @@
     </aside>
 
     <main class="stage">
+      <div class="stage-veil" aria-hidden="true">
+        <span class="veil-swag left"></span>
+        <span class="veil-swag right"></span>
+        <span class="veil-tassel left"></span>
+        <span class="veil-tassel right"></span>
+      </div>
+      <div class="fx-burst" id="fxBurst" aria-hidden="true"></div>
       <div class="canvas-host" id="canvasHost"></div>
 
       <div class="stage-frame" aria-hidden="true">
@@ -101,6 +113,8 @@
       </div>
 
       <div class="stage-bar">
+        <span class="bar-ribbon left" aria-hidden="true"></span>
+        <span class="bar-ribbon right" aria-hidden="true"></span>
         <div class="skin-strip" id="skinStrip"></div>
 
         <div class="controls" id="controls">
@@ -140,7 +154,7 @@
 
   <script src="./load-time-data.js"></script>
   <script src="./vendor/spine-player.js"></script>
-  <script src="./app.js?v=20260930"></script>
+  <script src="./app.js?v=20260930b"></script>
 </body>
 
 </html>

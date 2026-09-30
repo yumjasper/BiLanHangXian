@@ -472,6 +472,7 @@ function loadIndex() {
         if (/[?&]bare=1/.test(location.search)) {
           document.body.classList.add("bare-mode");
         }
+        initWeddingFx();
 
         updateSideHint(false);
         updateLocalNotice();
@@ -495,11 +496,12 @@ function loadIndex() {
     }
 
     var fragment = document.createDocumentFragment();
-    items.forEach(function (ship) {
+    items.forEach(function (ship, shipIdx) {
       var decision = decide(ship);
       var btn = el("button", "ship" + (ship.key === state.shipKey ? " is-active" : ""));
       btn.type = "button";
       btn.dataset.key = ship.key;
+      btn.style.setProperty("--i", Math.min(shipIdx, 20));
 
 var thumbBox = el("div", "thumb-box");
       var initial = String(ship.chName || ship.key || "?").trim().slice(0, 1);
@@ -889,6 +891,19 @@ function layerRank(item) {
     renderCrumbs();
     updateNav();
     dom.empty.classList.add("is-hidden");
+
+    /* 婚礼白动效：立绘入场浮现 + 金光迸发 */
+    if (!document.body.classList.contains("bare-mode")) {
+      var host = dom.canvasHost;
+      var layers = host ? host.querySelectorAll(".layer") : [];
+      for (var li = 0; li < layers.length; li++) {
+        var layer = layers[li];
+        layer.style.animation = "none";
+        void layer.offsetWidth;
+        layer.style.animation = "";
+      }
+      playBurst();
+    }
   }
 
   var LOAD_RETRY_MAX = 2;
@@ -993,9 +1008,10 @@ if (skin && skin.spines.length > 1) {
       return item.spines.length > 0;
     });
     if (usable.length > 1) {
-      usable.forEach(function (item) {
+      usable.forEach(function (item, chipIdx) {
         var chip = el("button", "skin-chip" + (item.key === skin.key ? " is-active" : ""));
         chip.type = "button";
+        chip.style.setProperty("--i", chipIdx);
         chip.appendChild(document.createTextNode(item.chName));
         chip.appendChild(el("span", "tag", item.key));
         chip.addEventListener("click", function () {
@@ -1007,9 +1023,11 @@ if (skin && skin.spines.length > 1) {
     }
 
 if (skin.spines.length > 1) {
+      var layerBase = usable.length > 1 ? usable.length : 0;
       skin.spines.forEach(function (spineItem, index) {
         var chip = el("button", "skin-chip" + (index === state.spineIdx ? " is-active" : ""));
         chip.type = "button";
+        chip.style.setProperty("--i", layerBase + index);
         chip.appendChild(document.createTextNode(layerLabel(spineItem.skelName, skin.key) || "图层 " + (index + 1)));
         chip.addEventListener("click", function () {
           if (index === state.spineIdx) return;
@@ -1447,6 +1465,7 @@ dom.closeSidebar.addEventListener("click", function () {
         if (/[?&]bare=1/.test(location.search)) {
           document.body.classList.add("bare-mode");
         }
+        initWeddingFx();
 
         updateSideHint(false);
         updateLocalNotice();
@@ -1492,6 +1511,110 @@ if (DATA_STATE === "blocked") {
         dom.shipList.appendChild(box);
         updateSideHint(true);
       });
+  }
+
+  /* ---------------- 婚礼白动效 ---------------- */
+
+  function initPetals() {
+    var host = document.getElementById("fxPetals");
+    if (!host) return;
+    var COUNT = 16;
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < COUNT; i++) {
+      var p = el("span", "petal" + (i % 5 === 0 ? " gold" : ""));
+      var dur = 9 + Math.random() * 9;
+      p.style.left = Math.random() * 100 + "vw";
+      p.style.animationDuration = dur + "s";
+      p.style.animationDelay = -Math.random() * dur + "s";
+      var scale = 0.6 + Math.random() * 0.9;
+      p.style.width = 14 * scale + "px";
+      p.style.height = 14 * scale + "px";
+      frag.appendChild(p);
+    }
+    host.appendChild(frag);
+  }
+
+  function initBokeh() {
+    var host = document.getElementById("fxBokeh");
+    if (!host) return;
+    var COUNT = 12;
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < COUNT; i++) {
+      var b = el("span", "bokeh");
+      var size = 22 + Math.random() * 74;
+      b.style.width = size + "px";
+      b.style.height = size + "px";
+      b.style.left = Math.random() * 100 + "vw";
+      b.style.top = Math.random() * 100 + "vh";
+      var fd = 6 + Math.random() * 7;
+      b.style.animationDuration = fd + "s, " + (3 + Math.random() * 4) + "s";
+      b.style.animationDelay = -Math.random() * fd + "s, -" + Math.random() * 4 + "s";
+      frag.appendChild(b);
+    }
+    host.appendChild(frag);
+  }
+
+  function initRipple() {
+    document.addEventListener("pointerdown", function (ev) {
+      var target = ev.target;
+      if (!target || !target.classList) return;
+      if (!target.classList.contains("ctl") && !target.classList.contains("icon-btn") &&
+          !target.classList.contains("chip") && !target.classList.contains("skin-chip")) return;
+      var rect = target.getBoundingClientRect();
+      var size = Math.max(rect.width, rect.height) * 1.1;
+      var r = el("span", "ripple");
+      r.style.width = r.style.height = size + "px";
+      r.style.left = ev.clientX - rect.left - size / 2 + "px";
+      r.style.top = ev.clientY - rect.top - size / 2 + "px";
+      target.appendChild(r);
+      setTimeout(function () {
+        if (r.parentNode) r.parentNode.removeChild(r);
+      }, 700);
+    });
+  }
+
+  function initSparkles() {
+    var last = 0;
+    document.addEventListener("pointermove", function (ev) {
+      var now = Date.now();
+      if (now - last < 60) return;
+      last = now;
+      var s = el("span", "sparkle");
+      s.style.left = ev.clientX - 4 + "px";
+      s.style.top = ev.clientY - 4 + "px";
+      document.body.appendChild(s);
+      setTimeout(function () {
+        if (s.parentNode) s.parentNode.removeChild(s);
+      }, 900);
+    });
+  }
+
+  function playBurst() {
+    var host = document.getElementById("fxBurst");
+    if (!host) return;
+    clear(host);
+    var ring = el("span", "burst-ring");
+    host.appendChild(ring);
+    for (var i = 0; i < 14; i++) {
+      var sp = el("span", "burst-spark");
+      var angle = (Math.PI * 2 * i) / 14 + Math.random() * 0.5;
+      var dist = 90 + Math.random() * 150;
+      sp.style.setProperty("--sx", Math.cos(angle) * dist + "px");
+      sp.style.setProperty("--sy", Math.sin(angle) * dist + "px");
+      sp.style.animationDelay = Math.random() * 0.12 + "s";
+      host.appendChild(sp);
+    }
+    setTimeout(function () {
+      clear(host);
+    }, 1300);
+  }
+
+  function initWeddingFx() {
+    if (document.body.classList.contains("bare-mode")) return;
+    initPetals();
+    initBokeh();
+    initRipple();
+    initSparkles();
   }
 
   if (document.readyState === "loading") {
