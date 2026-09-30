@@ -581,6 +581,7 @@ button {
 
 .stage {
   position: relative;
+  z-index: 1;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -1905,13 +1906,13 @@ body.bare-mode .toolbar {
   inset: -12%;
   z-index: 0;
   pointer-events: none;
-  filter: blur(64px);
-  opacity: 0.6;
+  filter: blur(80px);
+  opacity: 0.14;
   background:
-    radial-gradient(36% 30% at 20% 26%, rgba(247, 205, 224, 0.5), transparent 70%),
-    radial-gradient(30% 26% at 78% 16%, rgba(240, 220, 189, 0.55), transparent 70%),
-    radial-gradient(34% 30% at 64% 80%, rgba(212, 226, 240, 0.42), transparent 70%),
-    radial-gradient(28% 24% at 12% 74%, rgba(255, 246, 226, 0.5), transparent 70%);
+    radial-gradient(30% 24% at 18% 24%, rgba(247, 205, 224, 0.55), transparent 70%),
+    radial-gradient(26% 20% at 80% 14%, rgba(240, 220, 189, 0.6), transparent 70%),
+    radial-gradient(28% 24% at 66% 82%, rgba(212, 226, 240, 0.5), transparent 70%),
+    radial-gradient(22% 18% at 10% 76%, rgba(255, 246, 226, 0.55), transparent 70%);
   animation: aurora-drift 26s ease-in-out infinite alternate;
 }
 
@@ -1969,18 +1970,8 @@ body.bare-mode .app::after {
 }
 
 .controls {
-  border-color: transparent;
-  background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.88), rgba(255, 250, 243, 0.78)) padding-box,
-    conic-gradient(
-      from var(--ring-angle),
-      rgba(201, 168, 106, 0.55),
-      rgba(235, 196, 210, 0.75),
-      rgba(159, 182, 196, 0.5),
-      rgba(240, 220, 189, 0.75),
-      rgba(201, 168, 106, 0.55)
-    ) border-box;
-  animation: ring-spin 9s linear infinite;
+  border-color: rgba(201, 168, 106, 0.38);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.88), rgba(255, 250, 243, 0.78));
   box-shadow: 0 16px 40px rgba(126, 100, 72, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
@@ -2001,18 +1992,30 @@ body.bare-mode .app::after {
 /* ---------- 舞台相框：@property 旋转珍珠贝母渐变边框 ---------- */
 
 .stage-frame {
-  border-color: transparent;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.02)) padding-box,
-    conic-gradient(
-      from var(--ring-angle),
-      rgba(201, 168, 106, 0.75),
-      rgba(235, 196, 210, 0.85),
-      rgba(159, 182, 196, 0.6),
-      rgba(240, 220, 189, 0.85),
-      rgba(201, 168, 106, 0.75)
-    ) border-box;
-  animation: frame-glow 6s ease-in-out infinite alternate, ring-spin 12s linear infinite;
+  border-color: rgba(201, 168, 106, 0.4);
+  background: none;
+  animation: frame-glow 6s ease-in-out infinite alternate;
+}
+
+.frame-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--ring-angle),
+    rgba(201, 168, 106, 0.8),
+    rgba(235, 196, 210, 0.9),
+    rgba(159, 182, 196, 0.65),
+    rgba(240, 220, 189, 0.9),
+    rgba(201, 168, 106, 0.8)
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: ring-spin 12s linear infinite;
+  pointer-events: none;
 }
 
 /* ---------- 棱彩流光标题 ---------- */
@@ -2022,10 +2025,12 @@ body.bare-mode .app::after {
   background: linear-gradient(
     100deg,
     #38303c 0%,
-    #a9863f 30%,
-    #dc9db5 48%,
-    #9fb6c4 62%,
-    #a9863f 78%,
+    #38303c 22%,
+    #a9863f 38%,
+    #b4566b 50%,
+    #7d93a6 62%,
+    #a9863f 76%,
+    #38303c 90%,
     #38303c 100%
   );
   background-size: 240% 100%;
