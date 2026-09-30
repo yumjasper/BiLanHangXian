@@ -1324,3 +1324,60 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+/* ==========================================================================
+   bare 模式：供 render_cli.py 自动化渲染使用
+   隐藏全部界面 UI，只保留立绘舞台，保证输出为纯净的合成立绘。
+   触发方式：在 URL 后追加 ?bare=1
+   ========================================================================== */
+body.bare-mode .sidebar,
+body.bare-mode .hud,
+body.bare-mode .stage-frame,
+body.bare-mode .local-notice,
+body.bare-mode .toast,
+body.bare-mode .empty,
+body.bare-mode .side-foot,
+body.bare-mode .topbar,
+body.bare-mode .ctrl-bar,
+body.bare-mode .crumb-bar,
+body.bare-mode .skin-strip {
+  display: none !important;
+}
+
+body.bare-mode .app {
+  padding: 0 !important;
+}
+
+body.bare-mode .stage {
+  inset: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+body.bare-mode .canvas-host {
+  inset: 0 !important;
+}
+
+body.bare-mode .layer-chip,
+body.bare-mode .spine-panel,
+body.bare-mode .anim-panel,
+body.bare-mode .view-bar,
+body.bare-mode .stage-meta,
+body.bare-mode .chips,
+body.bare-mode .chip-bar,
+body.bare-mode .side-meta,
+body.bare-mode .list-meta,
+body.bare-mode .list-hint {
+  display: none !important;
+}
+
+/* 精确隐藏底部控制栏（含"图层 1/2"标签）与控制条容器 */
+body.bare-mode #btnSpines,
+body.bare-mode .ctl,
+body.bare-mode .controls,
+body.bare-mode .ctrl,
+body.bare-mode .bar,
+body.bare-mode .stage-bar,
+body.bare-mode .bottom-bar,
+body.bare-mode .toolbar {
+  display: none !important;
+}

@@ -464,8 +464,14 @@ function loadIndex() {
       btn.type = "button";
       btn.addEventListener("click", function () {
         state.activeChip = chip.key;
-renderChips();
+        renderChips();
         applyFilter();
+
+        /* bare 模式：供 CLI 自动化渲染，隐藏全部 UI 只留立绘 */
+        if (/[?&]bare=1/.test(location.search)) {
+          document.body.classList.add("bare-mode");
+        }
+
         updateSideHint(false);
         updateLocalNotice();
         saveState();
@@ -1277,8 +1283,14 @@ dom.closeSidebar.addEventListener("click", function () {
           }
           if (state.saved.chip) state.activeChip = state.saved.chip;
         }
-renderChips();
+        renderChips();
         applyFilter();
+
+        /* bare 模式：供 CLI 自动化渲染，隐藏全部 UI 只留立绘 */
+        if (/[?&]bare=1/.test(location.search)) {
+          document.body.classList.add("bare-mode");
+        }
+
         updateSideHint(false);
         updateLocalNotice();
 
