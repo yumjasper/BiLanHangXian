@@ -1877,3 +1877,219 @@ body.bare-mode .bottom-bar,
 body.bare-mode .toolbar {
   display: none !important;
 }
+
+/* ==========================================================================
+   Glass & Aurora 升级
+   参考：dashboard-glass / GlassDash（玻璃拟态）
+        Aurorάqua-UI / niceweb（极光渐变氛围）
+        react-css3-prismatic-glass-portfolio（@property 旋转边框 / 棱彩文字）
+   ========================================================================== */
+
+@property --ring-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes ring-spin {
+  to {
+    --ring-angle: 360deg;
+  }
+}
+
+/* ---------- 极光氛围层：两团缓慢漂移的柔光（挂在 app 背景之上、内容之下） ---------- */
+
+.app::after {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  z-index: 0;
+  pointer-events: none;
+  filter: blur(64px);
+  opacity: 0.6;
+  background:
+    radial-gradient(36% 30% at 20% 26%, rgba(247, 205, 224, 0.5), transparent 70%),
+    radial-gradient(30% 26% at 78% 16%, rgba(240, 220, 189, 0.55), transparent 70%),
+    radial-gradient(34% 30% at 64% 80%, rgba(212, 226, 240, 0.42), transparent 70%),
+    radial-gradient(28% 24% at 12% 74%, rgba(255, 246, 226, 0.5), transparent 70%);
+  animation: aurora-drift 26s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift {
+  0% {
+    transform: translate3d(-2.5%, -1.5%, 0) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translate3d(2%, 2.5%, 0) rotate(3deg) scale(1.07);
+  }
+  100% {
+    transform: translate3d(3.5%, -2%, 0) rotate(-2deg) scale(1.03);
+  }
+}
+
+body.bare-mode .app::after {
+  display: none !important;
+}
+
+/* ---------- 玻璃拟态面板统一升级：磨砂 + 饱和 + 顶部高光 ---------- */
+
+.sidebar,
+.crumbs,
+.controls,
+.popup-panel,
+.skin-chip,
+.hud-item,
+.search-box,
+.toast,
+.local-notice {
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  backdrop-filter: blur(22px) saturate(1.5);
+}
+
+.sidebar {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 251, 245, 0.68) 62%, rgba(253, 246, 238, 0.72) 100%);
+}
+
+.sidebar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 3px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 4%, rgba(255, 255, 255, 0.95) 30%, rgba(255, 255, 255, 0.95) 70%, transparent 96%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.crumbs {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.86), rgba(255, 250, 243, 0.68));
+  border-color: rgba(255, 255, 255, 0.65);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), var(--shadow-sm);
+}
+
+.controls {
+  border-color: transparent;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.88), rgba(255, 250, 243, 0.78)) padding-box,
+    conic-gradient(
+      from var(--ring-angle),
+      rgba(201, 168, 106, 0.55),
+      rgba(235, 196, 210, 0.75),
+      rgba(159, 182, 196, 0.5),
+      rgba(240, 220, 189, 0.75),
+      rgba(201, 168, 106, 0.55)
+    ) border-box;
+  animation: ring-spin 9s linear infinite;
+  box-shadow: 0 16px 40px rgba(126, 100, 72, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.popup-panel {
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.94), rgba(255, 250, 243, 0.88));
+  border-color: rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), var(--shadow-lg);
+}
+
+.skin-chip,
+.hud-item,
+.search-box,
+.toast,
+.local-notice {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), var(--shadow-sm);
+}
+
+/* ---------- 舞台相框：@property 旋转珍珠贝母渐变边框 ---------- */
+
+.stage-frame {
+  border-color: transparent;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.02)) padding-box,
+    conic-gradient(
+      from var(--ring-angle),
+      rgba(201, 168, 106, 0.75),
+      rgba(235, 196, 210, 0.85),
+      rgba(159, 182, 196, 0.6),
+      rgba(240, 220, 189, 0.85),
+      rgba(201, 168, 106, 0.75)
+    ) border-box;
+  animation: frame-glow 6s ease-in-out infinite alternate, ring-spin 12s linear infinite;
+}
+
+/* ---------- 棱彩流光标题 ---------- */
+
+.brand-text h1,
+.empty h2 {
+  background: linear-gradient(
+    100deg,
+    #38303c 0%,
+    #a9863f 30%,
+    #dc9db5 48%,
+    #9fb6c4 62%,
+    #a9863f 78%,
+    #38303c 100%
+  );
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: prismatic-shift 7s ease-in-out infinite alternate;
+}
+
+@keyframes prismatic-shift {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 100% 50%;
+  }
+}
+
+/* ---------- 品牌徽标：全息光泽扫过 ---------- */
+
+.brand-logo {
+  overflow: hidden;
+}
+
+.brand-logo::before {
+  content: "";
+  position: absolute;
+  inset: -46%;
+  z-index: 1;
+  background: conic-gradient(
+    from var(--ring-angle),
+    transparent 0deg,
+    rgba(255, 244, 214, 0) 50deg,
+    rgba(255, 248, 228, 0.9) 95deg,
+    transparent 150deg,
+    transparent 360deg
+  );
+  mix-blend-mode: screen;
+  animation: ring-spin 5.5s linear infinite;
+  border-radius: 50%;
+}
+
+/* ---------- 3D 视差（JS 驱动）：立绘 / 相框 / 纱幔分层深度 ---------- */
+
+.canvas-host {
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.stage-frame {
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.stage-veil {
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+/* 控件悬停浮起 */
+.ctl:hover {
+  transform: translateY(-1px);
+}
+
+.skin-chip:hover {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 10px 24px rgba(126, 100, 72, 0.16);
+}

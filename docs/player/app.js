@@ -1611,12 +1611,31 @@ if (DATA_STATE === "blocked") {
     }, 1300);
   }
 
+  function initParallax() {
+    var host = document.getElementById("canvasHost");
+    var frame = document.querySelector(".stage-frame");
+    var veil = document.querySelector(".stage-veil");
+    var raf = null;
+    document.addEventListener("pointermove", function (ev) {
+      if (raf) return;
+      raf = requestAnimationFrame(function () {
+        raf = null;
+        var nx = ev.clientX / window.innerWidth - 0.5;
+        var ny = ev.clientY / window.innerHeight - 0.5;
+        if (host) host.style.transform = "perspective(1200px) translate3d(" + (nx * -8) + "px," + (ny * -6) + "px,0)";
+        if (frame) frame.style.transform = "translate3d(" + (nx * -14) + "px," + (ny * -10) + "px,0)";
+        if (veil) veil.style.transform = "translate3d(" + (nx * 6) + "px," + (ny * 4) + "px,0)";
+      });
+    });
+  }
+
   function initWeddingFx() {
     if (document.body.classList.contains("bare-mode")) return;
     initPetals();
     initBokeh();
     initRipple();
     initSparkles();
+    initParallax();
   }
 
   if (document.readyState === "loading") {
