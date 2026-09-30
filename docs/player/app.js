@@ -13,7 +13,7 @@ var INDEX_URL = "../index.json";
   var DATA_STATE = "loading";
 
   var ANIM_ALIASES = [
-    { re: /^(idle|default|stand|normal|loop)$/i, name: "待机" },
+    { re: /^(normal|idle|default|stand|loop)$/i, name: "待机" },
     { re: /^(touch|special|click|reaction|interact)/i, name: "点击" },
     { re: /^(login|home|main|start)/i, name: "登录" },
     { re: /^(attack|fire|shoot|battle|skill)/i, name: "攻击" },
@@ -739,14 +739,7 @@ function layerRank(item) {
     });
     state.anims = animations;
 
-    var preferred = null;
-    for (var i = 0; i < animations.length; i++) {
-      if (/idle/i.test(animations[i])) {
-        preferred = animations[i];
-        break;
-      }
-    }
-    if (!preferred) preferred = animations[0] || null;
+    var preferred = pickIdleAnimation(animations);
 
     if (preferred) {
       try {
@@ -946,9 +939,31 @@ opt.appendChild(el("span", null, layerLabel(spineItem.skelName, skin.key) || "�
     });
   }
 
+  function pickIdleAnimation(animations) {
+    if (!animations || !animations.length) return null;
+    // 待机动作优先: exact normal/idle, 再 idle 子串, 再 normal 子串, 最后退回列表第一个
+    for (var i = 0; i < animations.length; i++) {
+      if (/^(normal|idle)$/i.test(animations[i])) return animations[i];
+    }
+    for (var j = 0; j < animations.length; j++) {
+      if (/idle/i.test(animations[j])) return animations[j];
+    }
+    for (var k = 0; k < animations.length; k++) {
+      if (/normal/i.test(animations[k])) return animations[k];
+    }
+    return animations[0];
+  }
+
   function playAnimation(name) {
     var main = state.player;
     if (!main || !main.animationState) return;
+    // 先校验动作是否存在于主图层, 避免运行库在 clearTracks 之后才因找不到动作抛错,
+    // 导致轨道被清空、骨架重置、画面静止 (表现为"无法播放该动作")
+    var exists = (main.skeleton.data.animations || []).some(function (a) { return a.name === name; });
+    if (!exists) {
+      toast("无法播放该动作");
+      return;
+    }
     var ok = false;
     try {
       main.setAnimation(name);
